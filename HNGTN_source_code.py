@@ -422,28 +422,6 @@ def make_transformer_training_data(tokens, token_to_id, win_size):
 
     return train_inputs, train_targets
 
-def get_loss(model, train_inputs, train_targets):
-    batch_size = 256
-
-    prev_train_state = model.training
-    model.eval()
-
-    total_loss = 0.0
-    total_tokens = 0
-    for start in range(0, len(train_inputs), batch_size):
-        inputs = train_inputs[start:start + batch_size].to(device)
-        targets = train_targets[start:start + batch_size].to(device)
-
-        transformer_logits, _ = model(inputs)
-        loss = F.cross_entropy(transformer_logits.reshape(-1, transformer_logits.size(-1)), targets.reshape(-1), reduction="sum")
-
-        total_loss += loss.item()
-        total_tokens += targets.numel()
-
-    model.train(prev_train_state)
-
-    return total_loss / total_tokens
-
 def main():
     win_size = 64
     max_new_tokens = 10
