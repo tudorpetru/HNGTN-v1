@@ -4,9 +4,9 @@ This file is a preprocessed subset of the WikiText-2 training dataset,
 introduced by Merity et al. in “Pointer Sentinel Mixture Models” (2016).
 
 WikiText-2 was derived from Wikipedia articles. This version was truncated,
-tokenized, and divided into chunks for the HNGTN experiments.
+tokenized, and divided into chunks for the HNGTN experiment.
 
-The underlying text remains subject to the applicable WikiText/Wikipedia
+The text remains subject to the applicable WikiText/Wikipedia
 Creative Commons Attribution-ShareAlike and GFDL licensing terms.
 
 Changes made:
