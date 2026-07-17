@@ -301,107 +301,6 @@ def load_transformer(path, d_model, n_heads, n_layers, d_ff, dropout):
 def basic_punctuation_spacer(string):
     return string.replace(".", " . ").replace("?", " ? ").replace("!", " ! ").replace(",", " , ").replace(")", " ) ").replace("(", " ( ").replace("[", " [ ").replace("]", " ] ").replace("'", " ' ").replace('"', ' " ').replace(":", " : ").replace(";", " ; ")
 
-def get_last_toks(lst, amount):
-    out_lst = []
-
-    for tok in reversed(lst):
-        out_lst.append(tok)
-
-        if len(out_lst) >= amount:
-            break
-
-    out_lst.reverse()
-
-    return out_lst
-
-def expand_transformer_vocab(model, optimizer, vocab, token_to_id, id_to_token, cur_tokens):
-    cur_tokens = sorted(set(cur_tokens) - set(token_to_id))
-    if not cur_tokens:
-        return model, optimizer, vocab, token_to_id, id_to_token
-
-    prev_vocab_size = len(vocab)
-    prev_embedding = model.token_embedding
-    prev_output = model.output
-
-    prev_embedding_weight = prev_embedding.weight
-    prev_output_weight = prev_output.weight
-    prev_output_bias = prev_output.bias
-
-    vocab.extend(cur_tokens)
-    
-    token_to_id = {}
-    for token_id, token in enumerate(vocab):
-        token_to_id[token] = token_id
-
-    id_to_token = {}
-    for token, token_id in token_to_id.items():
-        id_to_token[token_id] = token
-
-    cur_vocab_size = len(vocab)
-
-    new_embedding = nn.Embedding(num_embeddings=cur_vocab_size, embedding_dim=prev_embedding.embedding_dim).to(device= next(model.parameters()).device, dtype=prev_embedding_weight.dtype)
-    cur_output = nn.Linear(in_features=prev_embedding.embedding_dim, out_features=cur_vocab_size, bias=prev_output_bias is not None).to(device= next(model.parameters()).device, dtype=prev_embedding_weight.dtype)
-
-    nn.init.normal_(new_embedding.weight, mean=0.0, std=0.02)
-    nn.init.normal_(cur_output.weight, mean=0.0, std=0.02)
-
-    if cur_output.bias is not None:
-        nn.init.zeros_(cur_output.bias)
-
-    with torch.no_grad():
-        new_embedding.weight[:prev_vocab_size].copy_(prev_embedding_weight)
-        cur_output.weight[:prev_vocab_size].copy_(prev_output_weight)
-        if cur_output.bias is not None:
-            cur_output.bias[:prev_vocab_size].copy_(prev_output_bias)
-
-    new_embedding.weight.requires_grad_(prev_embedding_weight.requires_grad)
-    cur_output.weight.requires_grad_(prev_output_weight.requires_grad)
-    if cur_output.bias is not None:
-        cur_output.bias.requires_grad_(prev_output_bias.requires_grad)
-
-    model.token_embedding = new_embedding
-    model.output = cur_output
-    model.vocab_size = cur_vocab_size
-
-    param_pairs = [(prev_embedding_weight, new_embedding.weight), (prev_output_weight, cur_output.weight)]
-    if prev_output_bias is not None:
-        param_pairs.append((prev_output_bias, cur_output.bias))
-
-    changes = {}
-    for prev_param, cur_param in param_pairs:
-        changes[id(prev_param)] = cur_param   
-
-    for param_group in optimizer.param_groups:         
-        param_group["params"] = [changes.get(id(param), param) for param in param_group["params"]]
-
-    for prev_param, cur_param in param_pairs:
-        prev_state = optimizer.state.pop(prev_param, {})
-
-        cur_state = {}
-        for state_name, state_value in prev_state.items():
-            if not torch.is_tensor(state_value):
-                cur_state[state_name] = copy.deepcopy(state_value)
-                continue
-
-            if state_value.ndim == 0:
-                cur_state[state_name] = (state_value.detach().clone())
-                continue
-
-            if state_value.shape == prev_param.shape:
-                expanded_state = torch.zeros_like(cur_param, memory_format=torch.preserve_format)
-
-                expanded_state[:prev_vocab_size].copy_(
-                    state_value.to(device=expanded_state.device, dtype=expanded_state.dtype,))
-
-                cur_state[state_name] = expanded_state
-                continue
-
-            cur_state[state_name] = (state_value.detach().clone())
-
-        optimizer.state[cur_param] = cur_state
-
-    return model, optimizer, vocab, token_to_id, id_to_token
-
 def make_transformer_training_data(tokens, token_to_id, win_size):
     token_ids = []
     for token in tokens:
@@ -442,7 +341,6 @@ def main():
 
     train = True
 
-    par_lst = []
     data0 = data0.split()
 
     data_lst = []
@@ -453,6 +351,7 @@ def main():
     vocab = []
     temp_count = 0
     for data in data0:
+        vocab.append(data)
         temp_count += 1
         data_lst_loader.append(data)
 
@@ -462,7 +361,7 @@ def main():
 
             data_lst_loader = []
             temp_count = 0
-    vocab.append("<unk>")
+    vocab = sorted(set(vocab))
     
     if data_lst_loader:
         data = " ".join(data_lst_loader)
@@ -498,12 +397,9 @@ def main():
                 save_transformer(model, vocab, win_size, transformer_data_pth)
 
             data2_lst = data2.split()
-            model, optimizer, vocab, token_to_id, id_to_token = expand_transformer_vocab(model, optimizer, vocab, token_to_id, id_to_token, data2_lst)
 
             if len(data2_lst) <= win_size:
                 continue
-
-            par_lst.append(data2)
             
             current_chunk += 1
             print(f"Current Chunk: {current_chunk}/{total_chunks}")
