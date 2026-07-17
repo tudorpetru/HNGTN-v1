@@ -368,7 +368,6 @@ def main():
         data_lst.append(data)
 
     total_chunks = 0
-    current_chunk = 0
     for data in data_lst:
         total_chunks += 1
 
@@ -388,7 +387,7 @@ def main():
     if train:
         model = Transformer(vocab_size=len(vocab), context_size=win_size, d_model=d_model, n_heads=n_heads, n_layers=n_layers, d_ff=d_ff, dropout=dropout).to(device)
         optimizer = torch.optim.AdamW(model.parameters(), lr=transformer_lr, weight_decay=0.01)
-        for data2 in data_lst:
+        for index, data2 in enumerate(data_lst):
             win_size_temp = win_size
 
             checkpoint_num += 1
@@ -401,8 +400,7 @@ def main():
             if len(data2_lst) <= win_size:
                 continue
             
-            current_chunk += 1
-            print(f"Current Chunk: {current_chunk}/{total_chunks}")
+            print(f"Current Chunk: {index}/{total_chunks}")
 
             for i in range(win_size_temp):
                 n_gram_vocab, conns = train_model(data2, win_size_temp, n_gram_vocab, conns)
